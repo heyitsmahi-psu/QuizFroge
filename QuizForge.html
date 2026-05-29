@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizForge — STEM105 Midterm Project</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+/* ============================================================
+   QuizForge — style.css
+   STEM105 Midterm Project
+   
+   TABLE OF CONTENTS:
+   1. CSS Variables (color palette, fonts, sizes)
+   2. Reset & Base Styles
+   3. Theme Toggle Button
+   4. App Layout
+   5. Screen System (show/hide screens)
+   6. Start Screen
+   7. Quiz Screen (topbar, progress bar, cards, answers)
+   8. Results Screen
+   9. Shared Components (buttons, chips, feedback)
+   10. Animations & Keyframes
+   11. Responsive / Mobile Styles
+   ============================================================ */
+
+
+/* ────────────────────────────────────────────────────────────
+   1. CSS VARIABLES — central place to change colors/fonts
+   Light mode values are the defaults.
+   ──────────────────────────────────────────────────────────── */
+:root {
+  /* Colors */
+  --bg:          #f5f3ef;        /* warm off-white background */
+  --surface:     #ffffff;        /* card surface */
+  --surface-2:   #edeae4;        /* subtle panels */
+  --text:        #1a1714;        /* primary text */
+  --text-muted:  #7a736a;        /* secondary text */
+  --accent:      #e8500a;        /* orange accent (brand color) */
+  --accent-dark: #c44008;        /* darker orange for hover */
+  --accent-glow: rgba(232,80,10,.18);
+  --correct:     #1a9e5c;        /* green for correct answers */
+  --wrong:       #d63031;        /* red for wrong answers */
+  --border:      rgba(0,0,0,.09);
+
+  /* Fonts */
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
+
+  /* Sizing */
+  --radius-sm:  8px;
+  --radius-md:  16px;
+  --radius-lg:  24px;
+  --shadow:     0 4px 24px rgba(0,0,0,.08);
+  --shadow-lg:  0 12px 48px rgba(0,0,0,.12);
+
+  /* Timer ring circumference = 2 * π * r = 2 * 3.14159 * 15 ≈ 94.25 */
+  --ring-c: 94.25;
+}
+
+/* Dark mode: override only the color variables */
+body.dark {
+  --bg:         #111010;
+  --surface:    #1c1b1a;
+  --surface-2:  #262422;
+  --text:       #f0ece6;
+  --text-muted: #837c74;
+  --border:     rgba(255,255,255,.07);
+  --shadow:     0 4px 24px rgba(0,0,0,.4);
+  --shadow-lg:  0 12px 48px rgba(0,0,0,.5);
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   2. RESET & BASE STYLES
+   Remove browser defaults so we control everything
+   ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;  /* padding doesn't expand element width */
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  transition: background-color .3s, color .3s; /* smooth theme switch */
+
+  /* Subtle dot-grid texture on the background */
+  background-image: radial-gradient(circle, var(--text-muted) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-attachment: fixed;
+  opacity-pattern: .04; /* not a real property — handled below */
+}
+
+/* Layer a solid color on top of the dot texture so it's subtle */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  opacity: .88;
+  pointer-events: none;
+  z-index: 0;
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   3. THEME TOGGLE BUTTON (fixed top-right corner)
+   ──────────────────────────────────────────────────────────── */
+#theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform .2s, background .3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#theme-toggle:hover { transform: scale(1.12) rotate(15deg); }
+
+
+/* ────────────────────────────────────────────────────────────
+   4. APP LAYOUT — centered card wrapper
+   ──────────────────────────────────────────────────────────── */
+.app {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 560px;
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   5. SCREEN SYSTEM
+   All screens exist in the HTML; we show/hide with .active
+   ──────────────────────────────────────────────────────────── */
+.screen {
+  display: none;           /* hidden by default */
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  animation: fadeSlideUp .45s ease forwards;
+}
+
+/* JavaScript adds .active to make a screen visible */
+.screen.active {
+  display: flex;
+}
+
+/* Utility: hidden class used by JS */
+.hidden { display: none !important; }
+
+
+/* ────────────────────────────────────────────────────────────
+   6. START SCREEN
+   ──────────────────────────────────────────────────────────── */
+
+/* Brand section: logo badge + name */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.logo-badge {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px var(--accent-glow);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -1px;
+}
+
+/* The orange part of "QuizForge" */
+.brand-name .accent { color: var(--accent); }
+
+.tagline {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* Row of info chips below tagline */
+.start-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.meta-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.footer-credit {
+  font-size: .78rem;
+  color: var(--text-muted);
+  opacity: .7;
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   7. QUIZ SCREEN
+   ──────────────────────────────────────────────────────────── */
+
+/* Top bar: "Question X of 10" on the left, timer on the right */
+.quiz-topbar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#progress-text {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+/* SVG circular timer */
+#timer-wrap {
+  position: relative;
+  width: 46px;
+  height: 46px;
+}
+
+.timer-ring {
+  width: 46px;
+  height: 46px;
+  transform: rotate(-90deg); /* start from top */
+}
+
+.timer-bg {
+  fill: none;
+  stroke: var(--surface-2);
+  stroke-width: 3;
+}
+
+#timer-circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: var(--ring-c);
+  stroke-dashoffset: 0;           /* JS animates this */
+  transition: stroke-dashoffset 1s linear, stroke .3s;
+}
+
+#timer-count {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Thin progress bar under topbar */
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 100px;
+  width: 0%;                       /* JS sets the width */
+  transition: width .5s ease;
+}
+
+/* Small score pill */
+.score-pill {
+  align-self: flex-end;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 4px 14px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.score-pill span { color: var(--accent); font-weight: 700; }
+
+/* Question card */
+.question-card {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px 24px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.question-text {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/* 2-column grid of answer buttons */
+.answers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Each answer option */
+.answer-btn {
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 14px 12px;
+  font-family: var(--font-body);
+  font-size: .9rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.4;
+  transition: border-color .15s, background .15s, transform .15s, box-shadow .15s;
+}
+
+.answer-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px var(--accent-glow);
+}
+
+/* Correct answer highlight */
+.answer-btn.correct {
+  border-color: var(--correct);
+  background: rgba(26,158,92,.12);
+  color: var(--correct);
+}
+
+/* Wrong answer highlight */
+.answer-btn.wrong {
+  border-color: var(--wrong);
+  background: rgba(214,48,49,.10);
+  color: var(--wrong);
+}
+
+/* Disabled state (after answering) */
+.answer-btn:disabled { cursor: not-allowed; opacity: .75; }
+
+/* Feedback bar inside the card */
+.feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
+  font-weight: 600;
+  animation: fadeSlideUp .3s ease;
+}
+
+.feedback.correct-fb {
+  background: rgba(26,158,92,.12);
+  color: var(--correct);
+}
+
+.feedback.wrong-fb {
+  background: rgba(214,48,49,.10);
+  color: var(--wrong);
+}
+
+#feedback-icon { font-size: 1.2rem; }
+
+
+/* ────────────────────────────────────────────────────────────
+   8. RESULTS SCREEN
+   ──────────────────────────────────────────────────────────── */
+.result-emoji {
+  font-size: 4rem;
+  animation: bounceIn .6s ease;
+}
+
+.result-title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  text-align: center;
+}
+
+.result-subtitle {
+  color: var(--text-muted);
+  font-size: .95rem;
+}
+
+/* Big score number */
+.score-display {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+#final-score {
+  font-family: var(--font-display);
+  font-size: 5rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  animation: countUp .6s ease;
+}
+
+.score-out-of {
+  font-size: 1.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Row of 3 stat boxes */
+.result-stats {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.stat-box {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: var(--shadow);
+}
+
+.stat-num {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.stat-label {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.result-message {
+  font-size: 1rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+  max-width: 360px;
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   9. SHARED COMPONENTS
+   ──────────────────────────────────────────────────────────── */
+
+/* Primary action button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .2s, box-shadow .2s, background .2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  background: var(--accent-dark);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   10. ANIMATIONS & KEYFRAMES
+   ──────────────────────────────────────────────────────────── */
+
+/* Slide up + fade in — used for screens & feedback */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Bounce in — used for result emoji */
+@keyframes bounceIn {
+  0%   { transform: scale(.3); opacity: 0; }
+  60%  { transform: scale(1.1); }
+  80%  { transform: scale(.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Subtle pulse — used for logo badge */
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 8px 20px var(--accent-glow); }
+  50%       { box-shadow: 0 8px 32px rgba(232,80,10,.35); }
+}
+
+/* Placeholder for score count — triggers CSS paint */
+@keyframes countUp {
+  from { opacity: 0; transform: scale(.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Shake animation for wrong answer */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.shake { animation: shake .35s ease; }
+
+
+/* ────────────────────────────────────────────────────────────
+   11. RESPONSIVE / MOBILE STYLES
+   ──────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .brand-name   { font-size: 1.9rem; }
+  .answers-grid { grid-template-columns: 1fr; } /* stack vertically */
+  #final-score  { font-size: 4rem; }
+  .result-stats { gap: 8px; }
+  .stat-num     { font-size: 1.3rem; }
+}
+  </style>
+</head>
+<body>
+
+  <!-- ─── DARK MODE TOGGLE ─────────────────────────── -->
+  <button id="theme-toggle" aria-label="Toggle dark mode">
+    <span id="theme-icon">🌙</span>
+  </button>
+
+  <!-- ─── MAIN APP CONTAINER ───────────────────────── -->
+  <div class="app">
+
+    <!-- SCREEN 1: START SCREEN -->
+    <section id="start-screen" class="screen active">
+      <div class="brand">
+        <div class="logo-badge">Q</div>
+        <h1 class="brand-name">Quiz<span class="accent">Forge</span></h1>
+      </div>
+      <p class="tagline">Test your programming knowledge.<br/>10 questions. Are you ready?</p>
+      <div class="start-meta">
+        <div class="meta-chip">⏱ 20 sec / question</div>
+        <div class="meta-chip">🎯 10 questions</div>
+        <div class="meta-chip">🔀 Randomized</div>
+      </div>
+      <button id="start-btn" class="btn btn-primary">
+        <span>Start Quiz</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <p class="footer-credit">STEM105 Midterm · Built with HTML, CSS &amp; JS</p>
+    </section>
+
+    <!-- SCREEN 2: QUIZ SCREEN -->
+    <section id="quiz-screen" class="screen">
+      <div class="quiz-topbar">
+        <span id="progress-text">Question 1 of 10</span>
+        <div id="timer-wrap">
+          <svg class="timer-ring" viewBox="0 0 36 36">
+            <circle class="timer-bg"  cx="18" cy="18" r="15"/>
+            <circle id="timer-circle" cx="18" cy="18" r="15"/>
+          </svg>
+          <span id="timer-count">20</span>
+        </div>
+      </div>
+      <div class="progress-bar-track">
+        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+      </div>
+      <div class="score-pill">Score: <span id="live-score">0</span></div>
+      <div class="question-card">
+        <p id="question-text" class="question-text">Loading question…</p>
+        <div id="answers-grid" class="answers-grid"></div>
+        <div id="feedback" class="feedback hidden">
+          <span id="feedback-icon"></span>
+          <span id="feedback-text"></span>
+        </div>
+      </div>
+      <button id="next-btn" class="btn btn-primary hidden">
+        Next Question
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </section>
+
+    <!-- SCREEN 3: RESULTS SCREEN -->
+    <section id="results-screen" class="screen">
+      <div id="result-emoji" class="result-emoji">🏆</div>
+      <h2 id="result-title" class="result-title">Quiz Complete!</h2>
+      <p id="result-subtitle" class="result-subtitle">Here's how you did:</p>
+      <div class="score-display">
+        <span id="final-score">0</span>
+        <span class="score-out-of">/ 10</span>
+      </div>
+      <div class="result-stats">
+        <div class="stat-box">
+          <span class="stat-num" id="stat-correct">0</span>
+          <span class="stat-label">Correct</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-num" id="stat-wrong">0</span>
+          <span class="stat-label">Wrong</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-num" id="stat-pct">0%</span>
+          <span class="stat-label">Score</span>
+        </div>
+      </div>
+      <p id="result-message" class="result-message"></p>
+      <button id="restart-btn" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.55"/></svg>
+        Restart Quiz
+      </button>
+    </section>
+
+  </div><!-- /.app -->
+
+  <script>
+/* ============================================================
+   QuizForge — script.js
+   STEM105 Midterm Project
+
+   PROGRAMMING CONCEPTS USED IN THIS FILE:
+   ✅ Variables        — storing data with let / const
+   ✅ Arrays           — storing the question bank
+   ✅ Functions        — reusable blocks of code
+   ✅ Loops            — building the answer buttons
+   ✅ if / else        — checking answers, updating score
+   ✅ Event Listeners  — responding to button clicks
+   ✅ DOM Manipulation — updating what the user sees
+   ✅ Timer            — setInterval countdown
+   ✅ Randomization    — shuffling questions each game
+   ✅ Sound Effects    — AudioContext API
+   ============================================================ */
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 1: QUESTION BANK (Array of Objects)
+   
+   Each question is an object with:
+     - question  : the question text
+     - answers   : array of 4 possible answers
+     - correct   : index (0-3) of the right answer
+   ──────────────────────────────────────────────────────────── */
+const questionBank = [
+  {
+    question: "Which symbol is used for single-line comments in JavaScript?",
+    answers: ["#", "//", "/* */", "--"],
+    correct: 1
+  },
+  {
+    question: "What keyword in JavaScript declares a variable that cannot be reassigned?",
+    answers: ["let", "var", "const", "static"],
+    correct: 2
+  },
+  {
+    question: "What does HTML stand for?",
+    answers: [
+      "Hyperlinks and Text Markup Language",
+      "HyperText Markup Language",
+      "High-level Text Machine Language",
+      "Hyperlink Transfer Meta Language"
+    ],
+    correct: 1
+  },
+  {
+    question: "Which of these is NOT a primitive data type in JavaScript?",
+    answers: ["string", "boolean", "number", "array"],
+    correct: 3
+  },
+  {
+    question: "What is the output of: console.log(2 + '3') in JavaScript?",
+    answers: ["5", "23", "Error", "undefined"],
+    correct: 1   // JavaScript converts 2 to string and concatenates
+  },
+  {
+    question: "Which loop is best when you know exactly how many times to repeat?",
+    answers: ["while loop", "do...while loop", "for loop", "foreach loop"],
+    correct: 2
+  },
+  {
+    question: "What does CSS stand for?",
+    answers: [
+      "Creative Style Sheets",
+      "Computer Style Sheets",
+      "Cascading Style Sheets",
+      "Colorful Style Sheets"
+    ],
+    correct: 2
+  },
+  {
+    question: "In programming, what is a function?",
+    answers: [
+      "A type of variable",
+      "A reusable block of code that performs a task",
+      "A loop that runs forever",
+      "A way to store multiple values"
+    ],
+    correct: 1
+  },
+  {
+    question: "Which HTML tag links an external JavaScript file?",
+    answers: ["<js>", "<javascript>", "<link>", "<script>"],
+    correct: 3
+  },
+  {
+    question: "What does the === operator check in JavaScript?",
+    answers: [
+      "Assignment",
+      "Value equality only",
+      "Value AND type equality",
+      "Greater-than comparison"
+    ],
+    correct: 2
+  },
+  {
+    question: "Which method adds an item to the END of an array?",
+    answers: ["array.push()", "array.pop()", "array.shift()", "array.unshift()"],
+    correct: 0
+  },
+  {
+    question: "What is an if/else statement used for?",
+    answers: [
+      "Repeating code many times",
+      "Storing multiple values",
+      "Making decisions based on a condition",
+      "Defining a new variable"
+    ],
+    correct: 2
+  },
+  {
+    question: "What does document.getElementById() do?",
+    answers: [
+      "Creates a new HTML element",
+      "Deletes an HTML element",
+      "Selects an HTML element by its id attribute",
+      "Changes the page title"
+    ],
+    correct: 2
+  },
+  {
+    question: "Which value is NOT considered 'falsy' in JavaScript?",
+    answers: ["0", "null", "false", "\"hello\""],
+    correct: 3   // Non-empty strings are truthy
+  },
+  {
+    question: "What does the 'return' keyword do inside a function?",
+    answers: [
+      "Stops the entire program",
+      "Repeats the function",
+      "Sends a value back to where the function was called",
+      "Declares a variable"
+    ],
+    correct: 2
+  }
+];
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 2: GAME STATE VARIABLES
+   
+   These variables track what's happening during the quiz.
+   We use 'let' because they change as the game progresses.
+   ──────────────────────────────────────────────────────────── */
+let questions       = [];   // shuffled subset of questions for this game
+let currentIndex    = 0;    // which question we're on (0 = first)
+let score           = 0;    // how many the player got right
+let answered        = false; // prevent double-clicking answers
+let timerInterval   = null; // holds our setInterval reference
+let timeLeft        = 20;   // seconds remaining for current question
+
+const TOTAL_QUESTIONS = 10; // how many questions per game
+const TIME_PER_Q      = 20; // seconds per question
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 3: DOM ELEMENT REFERENCES
+   
+   We grab references to HTML elements once, then reuse them.
+   This is faster than calling getElementById() every time.
+   ──────────────────────────────────────────────────────────── */
+const startScreen   = document.getElementById('start-screen');
+const quizScreen    = document.getElementById('quiz-screen');
+const resultsScreen = document.getElementById('results-screen');
+
+const startBtn      = document.getElementById('start-btn');
+const nextBtn       = document.getElementById('next-btn');
+const restartBtn    = document.getElementById('restart-btn');
+const themeToggle   = document.getElementById('theme-toggle');
+const themeIcon     = document.getElementById('theme-icon');
+
+const progressText  = document.getElementById('progress-text');
+const progressFill  = document.getElementById('progress-bar-fill');
+const liveScore     = document.getElementById('live-score');
+const questionText  = document.getElementById('question-text');
+const answersGrid   = document.getElementById('answers-grid');
+const feedbackEl    = document.getElementById('feedback');
+const feedbackIcon  = document.getElementById('feedback-icon');
+const feedbackText  = document.getElementById('feedback-text');
+
+const timerCount    = document.getElementById('timer-count');
+const timerCircle   = document.getElementById('timer-circle');
+
+const finalScore    = document.getElementById('final-score');
+const statCorrect   = document.getElementById('stat-correct');
+const statWrong     = document.getElementById('stat-wrong');
+const statPct       = document.getElementById('stat-pct');
+const resultEmoji   = document.getElementById('result-emoji');
+const resultTitle   = document.getElementById('result-title');
+const resultMsg     = document.getElementById('result-message');
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 4: UTILITY FUNCTIONS (Helper functions)
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * showScreen — hides all screens, then shows the requested one.
+ * @param {HTMLElement} screen - the section to make visible
+ */
+function showScreen(screen) {
+  // Remove 'active' from all screens (hides them)
+  [startScreen, quizScreen, resultsScreen].forEach(s => s.classList.remove('active'));
+  // Add 'active' to just the screen we want
+  screen.classList.add('active');
+}
+
+/**
+ * shuffleArray — randomizes the order of an array.
+ * Uses the Fisher-Yates algorithm (a classic CS algorithm).
+ * @param {Array} arr - the array to shuffle
+ * @returns {Array} - a new shuffled array (original is untouched)
+ */
+function shuffleArray(arr) {
+  // Spread operator [...arr] makes a copy so we don't modify the original
+  const copy = [...arr];
+  // Loop backwards through the array
+  for (let i = copy.length - 1; i > 0; i--) {
+    // Pick a random index from 0 to i
+    const j = Math.floor(Math.random() * (i + 1));
+    // Swap copy[i] with copy[j] using destructuring
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/**
+ * playSound — generates a quick sound effect using the Web Audio API.
+ * No external audio files needed!
+ * @param {string} type - 'correct', 'wrong', or 'click'
+ */
+function playSound(type) {
+  try {
+    // AudioContext lets us generate sound with JavaScript
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();   // creates a tone
+    const gain = ctx.createGain();         // controls volume
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);         // output to speakers
+
+    if (type === 'correct') {
+      // Rising two-tone for correct
+      osc.frequency.setValueAtTime(440, ctx.currentTime);       // A4
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1); // E5
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+    } else if (type === 'wrong') {
+      // Low buzz for wrong
+      osc.frequency.setValueAtTime(200, ctx.currentTime);
+      osc.frequency.setValueAtTime(150, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    } else {
+      // Soft click
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.1);
+    }
+  } catch (e) {
+    // If audio fails (e.g. in a restricted browser), silently ignore
+    console.warn('Audio not available:', e);
+  }
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 5: TIMER FUNCTIONS
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * startTimer — begins the countdown for the current question.
+ * Updates the SVG ring and number every second.
+ */
+function startTimer() {
+  timeLeft = TIME_PER_Q;
+  updateTimerDisplay(); // show full timer immediately
+
+  // setInterval calls a function repeatedly every 1000ms (1 second)
+  timerInterval = setInterval(function() {
+    timeLeft--;         // decrease time by 1 each second
+
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      clearInterval(timerInterval); // stop the countdown
+      handleTimeout();              // time's up!
+    }
+
+    updateTimerDisplay();
+
+    // Turn the ring red when 5 seconds or fewer remain
+    if (timeLeft <= 5) {
+      timerCircle.style.stroke = '#d63031';
+      timerCount.style.color   = '#d63031';
+    }
+  }, 1000);
+}
+
+/**
+ * stopTimer — stops the countdown (called when user answers).
+ */
+function stopTimer() {
+  clearInterval(timerInterval);
+}
+
+/**
+ * updateTimerDisplay — syncs the SVG ring and number with timeLeft.
+ * The ring shrinks as time runs out.
+ */
+function updateTimerDisplay() {
+  timerCount.textContent = timeLeft;
+
+  // Calculate how much of the ring to show
+  // strokeDashoffset 0 = full ring, ringCircumference = empty ring
+  const ringC   = 94.25; // circumference from CSS variable
+  const fraction = timeLeft / TIME_PER_Q;                  // 0.0 to 1.0
+  const offset   = ringC - (fraction * ringC);             // how much to hide
+  timerCircle.style.strokeDashoffset = offset;
+
+  // Reset color (could have been turned red)
+  if (timeLeft > 5) {
+    timerCircle.style.stroke = 'var(--accent)';
+    timerCount.style.color   = 'var(--text)';
+  }
+}
+
+/**
+ * handleTimeout — called when timer hits 0.
+ * Treats it like a wrong answer with special message.
+ */
+function handleTimeout() {
+  if (answered) return; // already answered somehow
+  answered = true;
+  
+  // Highlight the correct answer so the player can learn
+  const buttons = answersGrid.querySelectorAll('.answer-btn');
+  buttons.forEach(function(btn, idx) {
+    btn.disabled = true;
+    if (idx === questions[currentIndex].correct) {
+      btn.classList.add('correct');
+    }
+  });
+
+  // Show feedback
+  showFeedback(false, "⏰ Time's up! The correct answer is highlighted.");
+  nextBtn.classList.remove('hidden');
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 6: QUIZ FLOW FUNCTIONS
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * startQuiz — resets state and begins a new game.
+ * Called when the user clicks "Start Quiz".
+ */
+function startQuiz() {
+  playSound('click');
+
+  // Reset all game state variables
+  score        = 0;
+  currentIndex = 0;
+  answered     = false;
+
+  // Shuffle the question bank and pick the first TOTAL_QUESTIONS
+  questions = shuffleArray(questionBank).slice(0, TOTAL_QUESTIONS);
+
+  // Switch to the quiz screen
+  showScreen(quizScreen);
+
+  // Display the first question
+  loadQuestion();
+}
+
+/**
+ * loadQuestion — renders the current question and its answer buttons.
+ */
+function loadQuestion() {
+  answered = false;
+
+  // Get the current question object from our array
+  const q = questions[currentIndex];
+
+  // ── Update the progress indicator ──
+  progressText.textContent = `Question ${currentIndex + 1} of ${TOTAL_QUESTIONS}`;
+
+  // ── Update the progress bar width ──
+  const pct = ((currentIndex) / TOTAL_QUESTIONS) * 100;
+  progressFill.style.width = pct + '%';
+
+  // ── Update the live score display ──
+  liveScore.textContent = score;
+
+  // ── Display the question text ──
+  questionText.textContent = q.question;
+
+  // ── Build the answer buttons ──
+  answersGrid.innerHTML = ''; // clear old buttons first
+
+  // Loop through the 4 answers and create a button for each
+  for (let i = 0; i < q.answers.length; i++) {
+    const btn = document.createElement('button');
+    btn.className   = 'answer-btn';
+    btn.textContent = q.answers[i];
+
+    // Each button knows its own index (i) via a data attribute
+    btn.dataset.index = i;
+
+    // Add a click listener to each button
+    btn.addEventListener('click', function() {
+      handleAnswer(parseInt(this.dataset.index));
+    });
+
+    answersGrid.appendChild(btn);
+  }
+
+  // ── Hide feedback and Next button ──
+  feedbackEl.classList.add('hidden');
+  feedbackEl.className = 'feedback hidden';
+  nextBtn.classList.add('hidden');
+
+  // ── Start the countdown timer ──
+  stopTimer(); // stop any running timer first (safety)
+  startTimer();
+}
+
+/**
+ * handleAnswer — processes the player's answer choice.
+ * @param {number} selectedIndex - which button was clicked (0–3)
+ */
+function handleAnswer(selectedIndex) {
+  if (answered) return; // ignore clicks if already answered
+  answered = true;
+  stopTimer(); // stop the timer
+
+  const q       = questions[currentIndex];
+  const correct = q.correct;
+  const buttons = answersGrid.querySelectorAll('.answer-btn');
+
+  // Disable all buttons so player can't change their answer
+  buttons.forEach(btn => { btn.disabled = true; });
+
+  if (selectedIndex === correct) {
+    // ── CORRECT ──
+    score++;
+    liveScore.textContent = score;
+
+    buttons[selectedIndex].classList.add('correct');
+    showFeedback(true, '✅ Correct! Great job!');
+    playSound('correct');
+
+  } else {
+    // ── WRONG ──
+    buttons[selectedIndex].classList.add('wrong');
+    buttons[correct].classList.add('correct'); // show the right answer
+
+    showFeedback(false, `❌ Wrong! The answer was: "${q.answers[correct]}"`);
+    playSound('wrong');
+
+    // Add a shake animation to the wrong button
+    buttons[selectedIndex].classList.add('shake');
+  }
+
+  // Show the Next button after answering
+  nextBtn.classList.remove('hidden');
+}
+
+/**
+ * showFeedback — displays the feedback bar inside the card.
+ * @param {boolean} isCorrect - true = green feedback, false = red
+ * @param {string}  message   - the text to display
+ */
+function showFeedback(isCorrect, message) {
+  feedbackEl.classList.remove('hidden', 'correct-fb', 'wrong-fb');
+  feedbackEl.classList.add(isCorrect ? 'correct-fb' : 'wrong-fb');
+  feedbackText.textContent = message;
+}
+
+/**
+ * nextQuestion — advances to the next question or ends the game.
+ */
+function nextQuestion() {
+  playSound('click');
+  currentIndex++; // move to the next question
+
+  // if/else: check if the quiz is over
+  if (currentIndex >= TOTAL_QUESTIONS) {
+    showResults(); // all questions done!
+  } else {
+    loadQuestion(); // load the next question
+  }
+}
+
+/**
+ * showResults — calculates final stats and displays the results screen.
+ */
+function showResults() {
+  const wrong      = TOTAL_QUESTIONS - score;
+  const percentage = Math.round((score / TOTAL_QUESTIONS) * 100);
+
+  // Fill in the stats
+  finalScore.textContent  = score;
+  statCorrect.textContent = score;
+  statWrong.textContent   = wrong;
+  statPct.textContent     = percentage + '%';
+
+  // Choose an emoji, title, and message based on score
+  // This uses a chain of if / else if / else statements
+  if (percentage >= 90) {
+    resultEmoji.textContent = '🏆';
+    resultTitle.textContent = 'Outstanding!';
+    resultMsg.textContent   = 'You\'re a programming prodigy. Perfect score territory!';
+  } else if (percentage >= 70) {
+    resultEmoji.textContent = '🎉';
+    resultTitle.textContent = 'Great Job!';
+    resultMsg.textContent   = 'Solid understanding of the fundamentals. Keep it up!';
+  } else if (percentage >= 50) {
+    resultEmoji.textContent = '📚';
+    resultTitle.textContent = 'Good Effort!';
+    resultMsg.textContent   = 'You\'re getting there. Review the tricky parts and try again!';
+  } else {
+    resultEmoji.textContent = '💪';
+    resultTitle.textContent = 'Keep Practicing!';
+    resultMsg.textContent   = 'Everyone starts somewhere. Review the material and try again!';
+  }
+
+  // Fill the progress bar to 100% on results
+  progressFill.style.width = '100%';
+
+  showScreen(resultsScreen);
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 7: DARK MODE TOGGLE
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * toggleTheme — switches between light and dark mode.
+ * Saves the preference to localStorage so it's remembered.
+ */
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+
+  // Check if dark class is now on/off, update the icon
+  if (document.body.classList.contains('dark')) {
+    themeIcon.textContent = '☀️';
+    localStorage.setItem('quizforge-theme', 'dark');
+  } else {
+    themeIcon.textContent = '🌙';
+    localStorage.setItem('quizforge-theme', 'light');
+  }
+}
+
+/**
+ * loadSavedTheme — restores theme from localStorage on page load.
+ */
+function loadSavedTheme() {
+  const saved = localStorage.getItem('quizforge-theme');
+  if (saved === 'dark') {
+    document.body.classList.add('dark');
+    themeIcon.textContent = '☀️';
+  }
+}
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 8: EVENT LISTENERS
+   
+   Event listeners "listen" for user actions and run a function
+   when that action happens (a click, a keypress, etc.)
+   ──────────────────────────────────────────────────────────── */
+
+// Start button → begin the quiz
+startBtn.addEventListener('click', startQuiz);
+
+// Next button → go to the next question
+nextBtn.addEventListener('click', nextQuestion);
+
+// Restart button → go back to start screen
+restartBtn.addEventListener('click', function() {
+  playSound('click');
+  stopTimer();
+  showScreen(startScreen);
+});
+
+// Theme toggle button → switch dark/light mode
+themeToggle.addEventListener('click', toggleTheme);
+
+// Keyboard shortcut: press Enter or Space to advance (accessibility)
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    // Only if Next button is visible
+    if (!nextBtn.classList.contains('hidden')) {
+      e.preventDefault();
+      nextQuestion();
+    }
+  }
+});
+
+
+/* ────────────────────────────────────────────────────────────
+   SECTION 9: INITIALIZATION
+   
+   This runs when the page first loads.
+   ──────────────────────────────────────────────────────────── */
+
+// Restore saved theme preference
+loadSavedTheme();
+
+// The start screen is already active via the HTML (.screen.active)
+// No other setup needed — the quiz begins when Start is clicked!
+
+console.log('🎯 QuizForge loaded successfully!');
+console.log(`📚 ${questionBank.length} questions available in the bank.`);
+  </script>
+</body>
+</html>
